@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title></title>
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.0/jquery.min.js"></script>
+    <script src="https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.0/mapbox-gl.js"></script>
+    <link
+      href="https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://npmcdn.com/csv2geojson@latest/csv2geojson.js"></script>
+    <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+
+      .map-overlay {
+        font: 12px/20px "Helvetica Neue", Arial, Helvetica, sans-serif;
+        position: absolute;
+        width: 25%;
+        left: 0;
+        padding: 10px;
+      }
+
+      .map-overlay-inner {
+        background-color: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+        height: 87vh;
+        padding: 10px;
+        margin-bottom: 10px;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .mapboxgl-popup-content {
+        font: 400 15px/22px "Source Sans Pro", "Helvetica Neue", Sans-serif;
+        padding: 0;
+        width: 250px;
+      }
+
+      .mapboxgl-popup-content-wrapper {
+        padding: 1%;
+      }
+
+      .mapboxgl-popup-content h3 {
+        background: rgb(61, 59, 59);
+        text-align: center;
+        color: #fff;
+        margin: 0;
+        display: block;
+        padding: 15px;
+        font-weight: 700;
+        margin-top: -5px;
+      }
+
+      .mapboxgl-popup-content h4 {
+        margin: 0;
+        display: block;
+        padding: 10px 3px 10px 10px;
+        font-weight: 400;
+      }
+
+      /* Popup styling */
+
+      .mapboxgl-popup {
+        padding-bottom: 5px;
+      }
+
+      .mapboxgl-popup-close-button {
+        display: none;
+      }
+
+      .mapboxgl-popup-content {
+        font: 400 15px/22px "Source Sans Pro", "Helvetica Neue", Sans-serif;
+        padding: 0;
+        width: 250px;
+      }
+
+      .mapboxgl-popup-content-wrapper {
+        padding: 1%;
+      }
+
+      .map-overlay h3 {
+        background: rgb(61, 59, 59);
+        text-align: center;
+        color: #fff;
+        margin: 0;
+        display: block;
+        padding: 15px;
+        font-weight: 700;
+        margin-top: -5px;
+      }
+
+      .map-overlay h4 {
+        margin: 0;
+        display: block;
+        padding: 10px 3px 10px 10px;
+        font-weight: 400;
+      }
+
+      .mapboxgl-container {
+        cursor: pointer;
+      }
+
+      .mapboxgl-popup-anchor-top > .mapboxgl-popup-content {
+        margin-top: 3px;
+      }
+
+      .mapboxgl-popup-anchor-top > .mapboxgl-popup-tip {
+        border-bottom-color: rgb(61, 59, 59);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+
+    <div class="map-overlay top">
+      <div class="map-overlay-inner" id="description">
+        <h3>Vallejo Food Mapping</h3>
+        <div id="description">
+          <h4>
+            Welcome to the Vallejo Food System map. This directory includes
+            healthy, no-cost food resources in and around Vallejo, California.
+            This tool is powered by Faith Foods.
+          </h4>
+          <h4>
+            Please click on any of the icons to learn more about services
+            offered.
+          </h4>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var transformRequest = (url, resourceType) => {
+        var isMapboxRequest =
+          url.slice(8, 22) === "api.mapbox.com" ||
+          url.slice(10, 26) === "tiles.mapbox.com";
+        return {
+          url: isMapboxRequest
+            ? url.replace("?", "?pluginName=sheetMapper&")
+            : url
+        };
+      };
+      //YOUR TURN: add your Mapbox token
+
+      mapboxgl.accessToken =
+        "pk.eyJ1IjoidnZuZGF0YSIsImEiOiJja3cwczl1d3YxMWNzMm5sdGRxYmN5emF4In0.ETLkAgElV-R6xqLEOm-Rpg"; //Mapbox token
+      var map = new mapboxgl.Map({
+        container: "map", // container id
+        style: "mapbox://styles/vvndata/cl8w4hynv006v14mmmjfbq30j", // YOUR TURN: choose a style: https://docs.mapbox.com/api/maps/#styles
+        center: [-122.261, 38.005], // starting position [lng, lat]
+        zoom: 10, // starting zoom
+        transformRequest: transformRequest
+      });
+
+      map.addControl(
+        new mapboxgl.GeolocateControl({
+          positionOptions: {
+            enableHighAccuracy: true
+          },
+          // When active the map will receive updates to the device's location as it changes.
+          trackUserLocation: true,
+          // Draw an arrow next to the location dot to indicate which direction the device is heading.
+          showUserHeading: true
+        })
+      );
+
+      $(document).ready(function () {
+        $.ajax({
+          type: "GET",
+          //YOUR TURN: Replace with csv export link
+          url:
+            "https://docs.google.com/spreadsheets/d/19ReKXZjNLnBeJ5gKlotqnRwt0CLjW5mkHxa3Nymyut8/gviz/tq?tqx=out:csv&sheet=Sheet1",
+          dataType: "text",
+          success: function (csvData) {
+            makeGeoJSON(csvData);
+          }
+        });
+
+        function makeGeoJSON(csvData) {
+          csv2geojson.csv2geojson(
+            csvData,
+            {
+              latfield: "latitude",
+              lonfield: "longitude",
+              delimiter: ","
+            },
+            function (err, data) {
+              map.on("load", function () {
+                map.loadImage(
+                  "./icons/meal-site.png",
+
+                  (error, image) => {
+                    if (error) throw error;
+
+                    // Add the image to the map style.
+                    map.addImage("Free meal site", image);
+                  }
+                );
+
+                map.loadImage(
+                  "./icons/fruits-green.png",
+
+                  (error, image) => {
+                    if (error) throw error;
+
+                    // Add the image to the map style.
+                    map.addImage("Farmers market", image);
+                  }
+                );
+
+                map.loadImage(
+                  "./icons/grocery-red.png",
+
+                  (error, image) => {
+                    if (error) throw error;
+
+                    // Add the image to the map style.
+                    map.addImage("Food pantry", image);
+                  }
+                );
+
+                let hoverStateId = null;
+
+                //Add the the layer to the map
+                map.addLayer({
+                  id: "csvData",
+                  type: "symbol",
+                  source: {
+                    type: "geojson",
+                    data: data
+                  },
+                  layout: {
+                    "icon-image": ["get", "type"],
+                    "icon-size": 0.3
+                  }
+                });
+
+                // When a click event occurs on a feature in the csvData layer, open a popup at the
+                // location of the feature, with description HTML from its properties.
+                map.on("click", "csvData", function (e) {
+                  //set popup text
+                  //You can adjust the values of the popup to match the headers of your CSV.
+                  // For example: e.features[0].properties.Name is retrieving information from the field Name in the original CSV.
+                  var description =
+                    `<h3>` +
+                    e.features[0].properties.location_name +
+                    `</h3>` +
+                    `<h4>` +
+                    `<b>` +
+                    `Address: ` +
+                    `</b>` +
+                    e.features[0].properties.address +
+                    `</h4>` +
+                    `<h4>` +
+                    `<b>` +
+                    `Phone: ` +
+                    `</b>` +
+                    e.features[0].properties.phone +
+                    `</h4>` +
+                    `<h4>` +
+                    `<b>` +
+                    `Details: ` +
+                    `</b>` +
+                    e.features[0].properties.notes +
+                    `</h4>` +
+                    `<h3>Hours</h3>` +
+                    `<h4>` +
+                    `Sunday: ` +
+                    e.features[0].properties.sunday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Monday: ` +
+                    e.features[0].properties.monday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Tuesday: ` +
+                    e.features[0].properties.tuesday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Wednesday: ` +
+                    e.features[0].properties.wednesday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Thursday: ` +
+                    e.features[0].properties.thursday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Friday: ` +
+                    e.features[0].properties.friday +
+                    `</h4>` +
+                    `<h4>` +
+                    `Saturday: ` +
+                    e.features[0].properties.saturday +
+                    `</h4>`;
+
+                  document.getElementById(
+                    "description"
+                  ).innerHTML = description;
+                });
+
+                // Change the cursor to a pointer when the mouse is over the places layer.
+                map.on("mouseenter", "csvData", (e) => {
+                  map.getCanvas().style.cursor = "pointer";
+
+                  if (e.features.length > 0) {
+                    var coordinates = e.features[0].geometry.coordinates.slice();
+                    var description =
+                      `<h3>` + e.features[0].properties.location_name + `</h3>`;
+
+                    new mapboxgl.Popup()
+                      .setLngLat(coordinates)
+                      .setHTML(description)
+                      .addTo(map);
+                  } else {
+                    const popups = document.getElementsByClassName(
+                      "mapboxgl-popup"
+                    );
+
+                    if (popups.length) {
+                      popups[0].remove();
+                    }
+                  }
+                });
+
+                // Change it back to a pointer when it leaves.
+                map.on("mouseleave", "csvData", function () {
+                  map.getCanvas().style.cursor = "";
+                  const popups = document.getElementsByClassName(
+                    "mapboxgl-popup"
+                  );
+
+                  if (popups.length) {
+                    popups[0].remove();
+                  }
+                });
+
+                map.on("mouseleave");
+
+                var bbox = turf.bbox(data);
+                map.fitBounds(bbox, { padding: 50 });
+              });
+            }
+          );
+        }
+      });
+    </script>
+  </body>
+</html>
